@@ -82,11 +82,20 @@ def send_slack_message():
     """Send market summary to Slack"""
     try:
         # Get Slack webhook URL from environment variable
-        webhook_url = os.environ.get('SLACK_WEBHOOK_URL')
-        
-        if not webhook_url:
-            print("Error: SLACK_WEBHOOK_URL environment variable not set")
-            return False
+        webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+
+if not webhook_url:
+    print("⚠️ SLACK_WEBHOOK_URL not found.")
+else:
+    print("✅ SLACK_WEBHOOK_URL found, sending message...")
+
+message = {
+    "text": "📈 Market summary job ran successfully!",
+}
+
+response = requests.post(webhook_url, json=message)
+
+print(f"Response: {response.status_code} - {response.text}")
             
         # Get market data
         sgx_data, vix_data, gold_data = get_market_data()
