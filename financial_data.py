@@ -1,3 +1,20 @@
+import yfinance as yf
+import time
+from datetime import date
+
+symbols = {
+    "NIFTY 50": "^NSEI",
+    "SGX Nifty": "^STI",  # Using STI as a proxy, actual SGX might need a different ticker or source
+    "INDIA VIX": "^NSEI",  # VIX ticker might need verification
+    "GOLD": "GC=F",
+    "USD/INR": "INR=X"
+}
+
+market_summary = [f"Market Summary for {date.today().strftime('%Y-%m-%d')}\n",
+                  "--------------------------------------------------"]
+
+print("YF.download() has changed argument auto_adjust default to True\n")
+
 for name, ticker in symbols.items():
     try:
         print(f"\nFetching data for {name} ({ticker})")
@@ -24,11 +41,19 @@ for name, ticker in symbols.items():
             continue
 
         # Get the latest and previous data
+        if len(data) < 2:
+            market_summary.append(f"⚠️ Insufficient data points (less than 2 days) for {name}.")
+            continue
+
         latest = data.iloc[-1]
         previous = data.iloc[-2]
 
+        if not isinstance(latest, pd.Series) or not isinstance(previous, pd.Series):
+            market_summary.append(f"⚠️ Error: Could not retrieve latest or previous price for {name} as Series.")
+            continue
+
         if close_col not in latest or close_col not in previous:
-            market_summary.append(f"⚠️ No valid price data for {name}. Check the data.")
+            market_summary.append(f"⚠️ No valid price data in latest or previous for {name}. Check the data columns.")
             continue
 
         price = float(latest[close_col])
@@ -39,9 +64,33 @@ for name, ticker in symbols.items():
             continue
 
         change = ((price - prev_price) / prev_price) * 100
-        # Further logic to handle VIX, Gold, and other conditions
-        # (same as your current code)
-    
+
+        if name == "INDIA VIX":
+            if change > 5:
+                market_summary.append(f"⚠️ {name} is up by {change:.2f}%. Market volatility might be increasing.")
+            elif change < -5:
+                market_summary.append(f"✅ {name} is down by {change:.2f}%. Market volatility might be decreasing.")
+            else:
+                market_summary.append(f"{name} change: {change:.2f}%.")
+        elif name == "GOLD":
+            if change > 1:
+                market_summary.append(f"⬆️ {name} is up by {change:.2f}%.")
+            elif change < -1:
+                market_summary.append(f"⬇️ {name} is down by {change:.2f}%.")
+            else:
+                market_summary.append(f"{name} change: {change:.2f}%.")
+        elif name == "USD/INR":
+            if change > 0.5:
+                market_summary.append(f"⬆️ {name} is up by {change:.2f}%.")
+            elif change < -0.5:
+                market_summary.append(f"⬇️ {name} is down by {change:.2f}%.")
+            else:
+                market_summary.append(f"{name} change: {change:.2f}%.")
+        else:
+            market_summary.append(f"{name} ({ticker}) change: {change:.2f}%.")
+
     except Exception as e:
         market_summary.append(f"❌ Error fetching *{name}* ({ticker}): {e}")
         continue
+
+print("\n".join(market_summary))
