@@ -1,89 +1,151 @@
 import requests
 import json
-from datetime import datetime
 import os
-from financial_data import get_market_data
-import pandas as pd  # Make sure pandas is imported here
+from datetime import datetime
+from financial_data_fixed import get_market_data
 
-def create_slack_message(sgx_data: pd.DataFrame, vix_data: pd.DataFrame, gold_data: pd.DataFrame):
-    """Create a formatted Slack message with market summary"""
-    if sgx_data.empty or vix_data.empty or gold_data.empty:
-        return [{"type": "section", "text": {"type": "plain_text", "text": "⚠️ Could not retrieve all market data."}}]
-
-    # Get latest data points
-    sgx_latest = sgx_data.iloc[-1]
-    vix_latest = vix_data.iloc[-1]
-    gold_latest = gold_data.iloc[-1]
-
-    # Ensure we're comparing scalar values
-    sgx_close = sgx_latest['Close']
-    vix_close = vix_latest['Close']
-    gold_close = gold_latest['Close']
-
-    # Format date
-    date_str = datetime.now().strftime('%Y-%m-%d')
-
-    # SGX data formatting
-    sgx_open = sgx_latest['Open']
-    sgx_emoji = ":chart_with_upwards_trend:" if sgx_close > sgx_open else ":chart_with_downwards_trend:"
-
-    # VIX data formatting
-    if pd.notna(vix_close):
-        if vix_close < 17:
-            vix_emoji = ":large_green_circle:"
-        elif vix_close > 25:
-            vix_emoji = ":red_circle:"
-        else:
-            vix_emoji = ":yellow_circle:"
-    else:
-        vix_emoji = ":question:"
-
-    # Gold data formatting
-    gold_open = gold_latest['Open']
-    if pd.notna(gold_open) and pd.notna(gold_close) and gold_open != 0:
-        gold_pct_change = ((gold_close - gold_open) / gold_open) * 100
-        if abs(gold_pct_change) < 0.7:
-            gold_emoji = ":yellow_circle:"
-        elif gold_pct_change >= 0.7:
-            gold_emoji = ":large_green_circle:"
-        else:  # gold_pct_change <= -0.7
-            gold_emoji = ":red_circle:"
-    else:
-        gold_emoji = ":question:"
-
-    # Create blocks for Slack message (modern formatting)
-    blocks = [
-        {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": f"Market Summary for {date_str}",
-                "emoji": True
+def send_slack_message():
+    """Send market summary to Slack"""
+    try:
+        # Get Slack webhook URL from environment variable
+        webhook_url = os.environ.get('SLACK_WEBHOOK_URL')
+        
+        if not webhook_url:
+            print("Error: SLACK_WEBHOOK_URL environment variable not set")
+            return False
+        
+        # Generate market summary
+        data_frames = get_market_data()
+        
+        # Create blocks for message
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"Market Summary for {datetime.now().strftime('%Y-%m-%d')}",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "divider"
             }
-        },
-        {
-            "type": "divider"
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*SGX* {sgx_emoji}\nOpened at: {sgx_open:.2f}\nClosed at: *{sgx_close:.2f}*"
+        ]
+        
+        for name, data in data_frames.items():
+            if len(data) < 2:
+                continue
+                
+            latest = data.iloc[-1]
+            previous = data.iloc[-2]
+            
+            # Safely extract the Close price
+            try:
+                latest_price = float(latest["Close"])
+                previous_price = float(previous["Close"])
+            except KeyError:
+                # If 'Close' isn't available, try to find an alternative
+                close_cols = [col for col in data.columns if "close" in str(col).lower()]
+                if close_cols:
+                    latest_price = float(latest[close_cols[0]])
+                    previous_price = float(previous[close_cols[0]])
+                else:
+                    continue
+            
+            if previous_price == 0:
+                continue
+                
+            change = ((latest_price - previous_price) / previous_price) * 100
+            
+            # Format the message with emoji based on the symbol and change
+            emoji = "🔄"
+            if name == "INDIA VIX":
+                if change > 5:
+                    emoji = "⚠️"
+                    description = "Market volatility might be increasing."
+                elif change < -5:
+                    emoji = "✅"
+                    description = "Market volatility might be decreasing."
+                else:
+                    description = ""
+            elif name == "GOLD":
+                if change > 1:
+                    emoji = "⬆️"
+                    description = "Significant rise."
+                elif change < -1:
+                    emoji = "⬇️"
+                    description = "Significant fall."
+                else:
+                    description = ""
+            elif name == "USD/INR":
+                if change > 0.5:
+                    emoji = "⬆️"
+                    description = "Rupee weakening."
+                elif change < -0.5:
+                    emoji = "⬇️"
+                    description = "Rupee strengthening."
+                else:
+                    description = ""
+            else:
+                if change > 1:
+                    emoji = "⬆️"
+                    description = ""
+                elif change < -1:
+                    emoji = "⬇️"
+                    description = ""
+                else:
+                    description = ""
+            
+            # Add section for this market data
+            block = {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{name}* {emoji}\nCurrent: *{latest_price:.2f}*\nChange: *{change:.2f}%*"
+                }
             }
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*VIX* {vix_emoji}\nCurrent level: *{vix_close:.2f}*"
-            }
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Gold* {gold_emoji}\nOpened at: {gold_open:.2f}\nClosed at: *{gold_close:.2f}*"
-            }
+            
+            if description:
+                block["text"]["text"] += f"\n_{description}_"
+                
+            blocks.append(block)
+        
+        # Add time of generation
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "plain_text",
+                    "text": f"Generated at {datetime.now().strftime('%H:%M:%S')} UTC",
+                    "emoji": True
+                }
+            ]
+        })
+        
+        # Prepare payload
+        payload = {
+            "blocks": blocks,
+            "text": f"Market Summary for {datetime.now().strftime('%Y-%m-%d')}"  # Fallback text
         }
-    ]
-    return blocks
+        
+        # Send to Slack
+        response = requests.post(
+            webhook_url,
+            data=json.dumps(payload),
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if response.status_code == 200:
+            print("Message sent to Slack successfully")
+            return True
+        else:
+            print(f"Failed to send message to Slack. Status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"Error sending Slack message: {e}")
+        return False
+
+if __name__ == "__main__":
+    send_slack_message()
