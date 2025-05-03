@@ -1,6 +1,7 @@
 import yfinance as yf
 import time
 from datetime import date
+import pandas as pd  # Ensure pandas is imported
 
 symbols = {
     "NIFTY 50": "^NSEI",
@@ -56,8 +57,12 @@ for name, ticker in symbols.items():
             market_summary.append(f"⚠️ No valid price data in latest or previous for {name}. Check the data columns.")
             continue
 
-        price = float(latest[close_col])
-        prev_price = float(previous[close_col])
+        try:
+            price = float(latest[close_col])
+            prev_price = float(previous[close_col])
+        except (TypeError, ValueError):
+            market_summary.append(f"⚠️ Error converting price data to float for {name}.")
+            continue
 
         if prev_price == 0:
             market_summary.append(f"⚠️ Previous price is zero for {name}, cannot compute change.")
@@ -94,3 +99,5 @@ for name, ticker in symbols.items():
         continue
 
 print("\n".join(market_summary))
+
+
