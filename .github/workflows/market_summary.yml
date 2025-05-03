@@ -1,5 +1,4 @@
 name: Daily Market Summary
-
 on:
   schedule:
     # Run at 8:40 AM UTC - adjust timezone as needed
