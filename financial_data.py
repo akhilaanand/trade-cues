@@ -20,19 +20,18 @@ for name, ticker in symbols.items():
     try:
         print(f"Fetching data for {name} ({ticker})")
         data = yf.download(ticker, period="2d", interval="1d", progress=False)
-        time.sleep(2)  # Rate-limit friendly
+        time.sleep(2)
 
         if data is None or data.shape[0] < 2:
             market_summary.append(f"⚠️ Could not retrieve enough data for *{name}*.")
             continue
 
-        # Flatten multi-index columns if present
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = ['_'.join(col).strip() for col in data.columns.values]
 
-        # Find Close column
-        close_cols = [col for col in data.columns if "Close" in col]
-        if not close_cols:
+        # Ensure close column exists
+        close_cols = [col for col in data.columns.tolist() if "Close" in col]
+        if len(close_cols) == 0:
             market_summary.append(f"⚠️ No close price found for *{name}*.")
             continue
 
@@ -44,7 +43,6 @@ for name, ticker in symbols.items():
         prev_price = previous[close_col]
         change = ((price - prev_price) / prev_price) * 100
 
-        # Format based on asset type
         if name == "VIX":
             color = "🔴" if price >= VIX_HIGH else "🟢"
             note = "High Volatility" if price >= VIX_HIGH else "Normal Volatility"
