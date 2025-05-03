@@ -27,7 +27,7 @@ jobs:
           pip install yfinance pandas colorama requests
       
       - name: Run market summary script
-        run: python financial_data_fixed.py
+        run: python financial_data.py
         
       - name: Send Slack message
         run: python slack_market_summary.py
