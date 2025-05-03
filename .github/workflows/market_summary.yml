@@ -1,10 +1,10 @@
-name: Trading Cues - Daily 
+name: Daily Market Summary
 
 on:
   schedule:
-    # Run at 8:40 AM IST - adjust timezone as needed
+    # Run at 8:40 AM UTC - adjust timezone as needed
     # This is in cron syntax: minute hour day month day-of-week
-    - cron: '40 8 * * 1-5'  # Runs at 8:40 AM IST Monday-Saturday
+    - cron: '40 8 * * 1-5'  # Runs at 8:40 AM UTC Monday-Friday
   
   # Allow manual triggering for testing
   workflow_dispatch:
@@ -28,15 +28,9 @@ jobs:
           pip install yfinance pandas colorama requests
       
       - name: Run market summary script
-        run: python financial_data.py
+        run: python financial_data_fixed.py
         
       - name: Send Slack message
         run: python slack_market_summary.py
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-      - name: Enable Debug Logging
-    run: |
-      echo "Debugging enabled"
-      export PYTHONUNBUFFERED=1
-      export FLASK_ENV=development
-      export DEBUG=True
