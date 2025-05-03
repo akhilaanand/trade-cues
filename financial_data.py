@@ -1,4 +1,5 @@
 import yfinance as yf
+import pandas as pd
 import time
 from datetime import datetime
 
@@ -15,26 +16,29 @@ market_summary = []
 date_today = datetime.now().strftime("%Y-%m-%d")
 market_summary.append(f"*Market Summary for {date_today}*\n" + "-"*30)
 
+# Download all data in one batch
+try:
+    data = yf.download(list(symbols.values()), period="2d", interval="1d", group_by='ticker', progress=False)
+except Exception as e:
+    print(f"❌ Failed to download data: {e}")
+    data = {}
+
+# Loop through each symbol
 for name, ticker in symbols.items():
     try:
-        print(f"Fetching data for {name} ({ticker})")
-        data = yf.download(ticker, period="2d", interval="1d", progress=False)
-        time.sleep(2)
+        print(f"Processing {name} ({ticker})")
+        df = data[ticker] if ticker in data else None
+        time.sleep(1.5)  # minor delay
 
-        if data is None or data.empty or len(data) < 2:
+        if df is None or df.empty or len(df) < 2:
             market_summary.append(f"⚠️ Could not retrieve enough data for *{name}*.")
             continue
 
-        # Sometimes the columns are a MultiIndex, flatten if needed
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = ['_'.join(col).strip() for col in data.columns.values]
+        latest = df.iloc[-1]
+        previous = df.iloc[-2]
 
-        latest = data.iloc[-1]
-        previous = data.iloc[-2]
-
-        close_col = [col for col in data.columns if "Close" in col][0]
-        price = latest[close_col]
-        prev_price = previous[close_col]
+        price = latest["Close"]
+        prev_price = previous["Close"]
         change = ((price - prev_price) / prev_price) * 100
 
         if name == "VIX":
@@ -56,7 +60,7 @@ for name, ticker in symbols.items():
         market_summary.append(f"❌ Error fetching *{name}* ({ticker}): {e}")
         continue
 
-# Save output for Slack
+# Save and print
 with open("summary.txt", "w") as f:
     f.write("\n".join(market_summary))
 
