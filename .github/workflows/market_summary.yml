@@ -34,3 +34,9 @@ jobs:
         run: python slack_market_summary.py
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Enable Debug Logging
+    run: |
+      echo "Debugging enabled"
+      export PYTHONUNBUFFERED=1
+      export FLASK_ENV=development
+      export DEBUG=True
