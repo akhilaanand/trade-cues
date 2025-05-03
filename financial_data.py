@@ -49,26 +49,15 @@ for name, ticker in symbols.items():
         latest = data.iloc[-1]
         previous = data.iloc[-2]
 
-        if not isinstance(latest, pd.Series) or not isinstance(previous, pd.Series):
-            market_summary.append(f"⚠️ Error: Could not retrieve latest or previous price for {name} as Series.")
-            continue
+        # Ensure we're comparing the scalar values, not Series
+        latest_price = float(latest[close_col])
+        previous_price = float(previous[close_col])
 
-        if close_col not in latest or close_col not in previous:
-            market_summary.append(f"⚠️ No valid price data in latest or previous for {name}. Check the data columns.")
-            continue
-
-        try:
-            price = float(latest[close_col])
-            prev_price = float(previous[close_col])
-        except (TypeError, ValueError):
-            market_summary.append(f"⚠️ Error converting price data to float for {name}.")
-            continue
-
-        if prev_price == 0:
+        if previous_price == 0:
             market_summary.append(f"⚠️ Previous price is zero for {name}, cannot compute change.")
             continue
 
-        change = ((price - prev_price) / prev_price) * 100
+        change = ((latest_price - previous_price) / previous_price) * 100
 
         if name == "INDIA VIX":
             if change > 5:
@@ -99,5 +88,3 @@ for name, ticker in symbols.items():
         continue
 
 print("\n".join(market_summary))
-
-
